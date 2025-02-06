@@ -1,0 +1,17 @@
+{
+  "name": "GitHub Metrics AMP",
+  "type": "prometheus",
+  "access": "proxy",
+  "url": "${AMP_ENDPOINT}",
+  "jsonData": {
+    "httpMethod": "POST",
+    "sigV4Auth": true,
+    "sigV4AuthType": "default",
+    "sigV4Region": "${AWS_REGION}"
+  },
+  "secureJsonData": {
+    "sigV4AccessKey": "${AWS_ACCESS_KEY_ID}",
+    "sigV4SecretKey": "${AWS_SECRET_ACCESS_KEY}"
+  }
+}
+

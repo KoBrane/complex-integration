@@ -1,0 +1,31 @@
+# prometheus/prometheus.yml
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'github-metrics'
+
+remote_write:
+  - url: ${AMP_ENDPOINT}api/v1/remote_write
+    sigv4:
+      region: ${AWS_REGION}
+      role_arn: ${AWS_ROLE_ARN}
+    queue_config:
+      max_samples_per_send: 1000
+      max_shards: 200
+      capacity: 2500
+    write_relabel_configs:
+      - source_labels: [__name__]
+        regex: github_.*
+        action: keep
+
+scrape_configs:
+  - job_name: 'github-metrics'
+    static_configs:
+      - targets: ['localhost:8000']
+    metrics_path: '/metrics'
+    scheme: 'http'
+    relabel_configs:
+      - source_labels: [__name__]
+        target_label: app
+        replacement: 'github-metrics'

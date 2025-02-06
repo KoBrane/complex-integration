@@ -1,0 +1,44 @@
+{
+    "dashboard": {
+      "id": null,
+      "title": "GitHub Organization Activity",
+      "tags": ["github", "metrics"],
+      "timezone": "browser",
+      "schemaVersion": 16,
+      "version": 0,
+      "panels": [
+        {
+          "title": "Active Users (24h)",
+          "type": "stat",
+          "datasource": "GitHub Metrics AMP",
+          "targets": [
+            {
+              "expr": "github_active_users_total",
+              "instant": true
+            }
+          ]
+        },
+        {
+          "title": "Event Distribution",
+          "type": "barchart",
+          "datasource": "GitHub Metrics AMP",
+          "targets": [
+            {
+              "expr": "sum by (event_type) (increase(github_user_events_total[24h]))",
+              "legendFormat": "{{event_type}}"
+            }
+          ]
+        },
+        {
+          "title": "API Rate Limit",
+          "type": "gauge",
+          "datasource": "GitHub Metrics AMP",
+          "targets": [
+            {
+              "expr": "github_api_rate_limit_remaining"
+            }
+          ]
+        }
+      ]
+    }
+  }

@@ -1,0 +1,86 @@
+name: GitHub Metrics to AMP Pipeline
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'  # Run every 15 minutes
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-west-2  # Change to your preferred region
+  ECR_REPOSITORY: github-metrics
+  ECS_CLUSTER: metrics-cluster
+  ECS_SERVICE: metrics-service
+  ECS_TASK_DEFINITION: metrics-task
+  CONTAINER_NAME: github-metrics
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          build-args: |
+            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+            AMP_WORKSPACE_ID=${{ secrets.AMP_WORKSPACE_ID }}
+            AMP_ENDPOINT=${{ secrets.AMP_ENDPOINT }}
+            GRAFANA_API_KEY=${{ secrets.GRAFANA_API_KEY }}
+
+      - name: Download task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition ${{ env.ECS_TASK_DEFINITION }} \
+            --query taskDefinition > task-definition.json
+
+      - name: Update ECS task definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+
+      - name: Deploy to Amazon ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+      - name: Configure Grafana Cloud
+        run: |
+          curl -X POST ${{ secrets.GRAFANA_CLOUD_API }}/datasources \
+            -H "Authorization: Bearer ${{ secrets.GRAFANA_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            --data-binary @grafana/datasource.json
+
+      - name: Import Grafana dashboards
+        run: |
+          for dashboard in grafana/dashboards/*.json; do
+            curl -X POST ${{ secrets.GRAFANA_CLOUD_API }}/dashboards/db \
+              -H "Authorization: Bearer ${{ secrets.GRAFANA_API_KEY }}" \
+              -H "Content-Type: application/json" \
+              --data-binary @$dashboard
+          done
